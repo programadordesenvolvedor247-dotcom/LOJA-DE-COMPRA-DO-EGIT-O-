@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel Global</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --bg:#0f172a;
+  --card:#ffffff;
+  --primary:#2563eb;
+  --danger:#dc2626;
+  --success:#16a34a;
+  --text:#0f172a;
+}
+
+body{
+  margin:0;
+  font-family:'Segoe UI',system-ui,Arial;
+  background:linear-gradient(135deg,#020617,#1e293b);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* 🔥 AJUSTE DE TAMANHO */
+.box{
+  background:var(--card);
+  width:100%;
+  max-width:460px;
+  padding:32px;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  border-radius:18px;
+}
+
+h2,h3{
+  text-align:center;
+  color:var(--text);
+  margin:6px 0;
+}
+
+/* INPUTS MAIORES */
+input{
+  width:100%;
+  padding:16px;
+  border-radius:12px;
+  border:1px solid #cbd5e1;
+  font-size:16px;
+}
+
+/* BOTÕES MAIORES */
+button{
+  width:100%;
+  padding:16px;
+  border-radius:12px;
+  border:none;
+  font-size:16px;
+  background:var(--primary);
+  color:#fff;
+  cursor:pointer;
+}
+button:hover{opacity:.9}
+
+.hidden{display:none}
+.coin{color:#f59e0b;font-weight:bold}
+
+/* CARDS */
+.card{
+  background:#f8fafc;
+  padding:14px;
+  border-radius:14px;
+  box-shadow:0 8px 20px rgba(0,0,0,.08);
+}
+
+/* CHAT */
+.chatMsgs{
+  height:190px;
+  overflow-y:auto;
+  background:#fff;
+  padding:10px;
+  border-radius:12px;
+}
+.msg{
+  font-size:14px;
+  margin-bottom:8px;
+  padding:6px 10px;
+  background:#f1f5f9;
+  border-radius:10px;
+  max-width:85%;
+}
+.msg.admin{background:#fee2e2}
+.msg.admin b{color:var(--danger)}
+.msg.sys{background:#dcfce7;font-style:italic}
+
+/* ADMIN */
+ul{padding:0}
+li{
+  list-style:none;
+  background:#f8fafc;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.ctrls{display:flex;gap:6px}
+.ctrls input{width:70px;padding:6px}
+.remove{background:var(--danger)}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="box" id="loginBox">
+  <h2>🔐 Login</h2>
+  <input id="loginUser" placeholder="Usuário">
+  <input id="loginPass" type="password" placeholder="Senha">
+  <button onclick="login()">Entrar</button>
+  <p onclick="showCadastro()" style="text-align:center;color:#2563eb;cursor:pointer">
+    Criar conta
+  </p>
+</div>
+
+<!-- CADASTRO -->
+<div class="box hidden" id="cadastroBox">
+  <h2>📝 Cadastro</h2>
+  <input id="cadUser" placeholder="Usuário">
+  <input id="cadPass" type="password" placeholder="Senha">
+  <button onclick="cadastrar()">Cadastrar</button>
+  <p onclick="showLogin()" style="text-align:center;color:#2563eb;cursor:pointer">
+    Voltar
+  </p>
+</div>
+
+<!-- USUÁRIO -->
+<div class="box hidden" id="userBox">
+  <h2>👤 Conta</h2>
+
+  <div class="card" style="text-align:center">
+    💰 Minhas moedas: <span class="coin" id="minhasMoedas">0</span>
+  </div>
+
+  <div class="card" id="lojaBox">
+    <h3>🛒 Spotify Premium</h3>
+    <p>Preço: <b>10 moedas</b></p>
+    <button onclick="comprar()">Comprar agora</button>
+  </div>
+
+  <div class="card">
+    <h3>💬 Chat Global</h3>
+    <div class="chatMsgs" id="chatMsgs"></div>
+    <input id="chatInput" placeholder="Mensagem">
+    <button onclick="enviarMsg()">Enviar</button>
+  </div>
+
+  <div class="card hidden" id="adminBox">
+    <h3>⚙ Admin</h3>
+    <ul id="listaUsuarios"></ul>
+    <button onclick="apagarChat()">🗑 Apagar Chat</button>
+  </div>
+
+  <button onclick="logout()">Sair</button>
+</div>
+
+<!-- 🔥 FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, query, where,
+  getDocs, onSnapshot, deleteDoc, doc,
+  updateDoc, serverTimestamp, orderBy
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBRU1COppsLe_QJmmRmFRASW-w_5pdUMSw",
+  authDomain: "teste-f56fb.firebaseapp.com",
+  projectId: "teste-f56fb"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const usersRef = collection(db,"usuarios");
+const chatRef  = collection(db,"chat");
+
+const ADMIN_USER="admin", ADMIN_PASS="123";
+const PRECO=10;
+const LINK="https://drive.google.com/file/d/1EsZtiiV7DfdsavMAQGX-2VZEV3jR_LKI/view";
+
+let usuarioId=null, nomeAtual="", isAdmin=false;
+
+window.showCadastro=()=>{loginBox.classList.add("hidden");cadastroBox.classList.remove("hidden")}
+window.showLogin=()=>{cadastroBox.classList.add("hidden");loginBox.classList.remove("hidden")}
+
+window.cadastrar=async()=>{
+  if(!cadUser.value||!cadPass.value) return alert("Preencha tudo");
+  const q=query(usersRef,where("user","==",cadUser.value));
+  if(!(await getDocs(q)).empty) return alert("Usuário já existe");
+  await addDoc(usersRef,{user:cadUser.value,pass:cadPass.value,moedas:0});
+  alert("Conta criada");
+  showLogin();
+}
+
+window.login=async()=>{
+  const u=loginUser.value,p=loginPass.value;
+
+  if(u===ADMIN_USER && p===ADMIN_PASS){
+    nomeAtual="ADMIN"; isAdmin=true;
+    loginBox.classList.add("hidden");
+    userBox.classList.remove("hidden");
+    adminBox.classList.remove("hidden");
+    lojaBox.classList.add("hidden");
+    minhasMoedas.textContent="∞";
+    ouvirUsuarios(); ouvirChat();
+    return;
+  }
+
+  const q=query(usersRef,where("user","==",u),where("pass","==",p));
+  const snap=await getDocs(q);
+  if(snap.empty) return alert("Login inválido");
+
+  usuarioId=snap.docs[0].id;
+  nomeAtual=snap.docs[0].data().user;
+
+  loginBox.classList.add("hidden");
+  userBox.classList.remove("hidden");
+
+  onSnapshot(doc(db,"usuarios",usuarioId),d=>{
+    minhasMoedas.textContent=d.data().moedas;
+  });
+
+  ouvirChat();
+}
+
+function ouvirUsuarios(){
+  onSnapshot(usersRef,snap=>{
+    listaUsuarios.innerHTML="";
+    snap.forEach(d=>{
+      const u=d.data();
+      const li=document.createElement("li");
+      li.innerHTML=`<span><b>${u.user}</b><br>💰 <span class="coin">${u.moedas}</span></span>`;
+      const c=document.createElement("div");
+      c.className="ctrls";
+
+      const i=document.createElement("input");
+      i.type="number"; i.placeholder="Moedas";
+
+      const b=document.createElement("button");
+      b.textContent="OK";
+      b.onclick=()=>updateDoc(doc(db,"usuarios",d.id),{moedas:Number(i.value)});
+
+      const r=document.createElement("button");
+      r.textContent="X"; r.className="remove";
+      r.onclick=()=>deleteDoc(doc(db,"usuarios",d.id));
+
+      c.append(i,b,r); li.appendChild(c);
+      listaUsuarios.appendChild(li);
+    });
+  });
+}
+
+function ouvirChat(){
+  onSnapshot(query(chatRef,orderBy("data","asc")),snap=>{
+    chatMsgs.innerHTML="";
+    snap.forEach(d=>{
+      const m=d.data();
+      const cls=m.sistema?"msg sys":m.user==="ADMIN"?"msg admin":"msg";
+      chatMsgs.innerHTML+=`<div class="${cls}"><b>${m.user}:</b> ${m.texto}</div>`;
+    });
+    chatMsgs.scrollTop=chatMsgs.scrollHeight;
+  });
+}
+
+window.enviarMsg=async()=>{
+  if(!chatInput.value) return;
+  await addDoc(chatRef,{user:nomeAtual,texto:chatInput.value,data:serverTimestamp()});
+  chatInput.value="";
+}
+
+window.comprar=async()=>{
+  const ref=doc(db,"usuarios",usuarioId);
+  const snap=await getDocs(query(usersRef,where("__name__","==",usuarioId)));
+  const moedas=snap.docs[0].data().moedas;
+  if(moedas<PRECO) return alert("Sem moedas");
+  await updateDoc(ref,{moedas:moedas-PRECO});
+  await addDoc(chatRef,{user:" 🪙 ",texto:`${nomeAtual} comprou Spotify Premium`,sistema:true,data:serverTimestamp()});
+  window.open(LINK,"_blank");
+}
+
+window.apagarChat=async()=>{
+  const s=await getDocs(chatRef);
+  s.forEach(d=>deleteDoc(doc(db,"chat",d.id)));
+}
+
+window.logout=()=>location.reload();
+</script>
+
+</body>
+</html>
+
+<script>
+(function () {
+
+  let splashShown = false;
+
+  function mostrarSplash() {
+    if (splashShown) return;
+    splashShown = true;
+
+    document.body.style.overflow = 'hidden';
+
+    const overlay = document.createElement('div');
+    overlay.id = '__splash_devtools';
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.85);
+      backdrop-filter:blur(6px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:99999999;
+      pointer-events:auto;
+    `;
+
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:#0b1220;
+      padding:30px;
+      border-radius:18px;
+      max-width:420px;
+      width:92%;
+      text-align:center;
+      color:#fff;
+      font-family:Segoe UI,Arial;
+      box-shadow:0 0 40px #000;
+      pointer-events:auto;
+    `;
+
+    card.innerHTML = `
+      <div style="font-size:52px">ðŸ”</div>
+      <h2 style="margin:10px 0;color:#38bdf8">
+        ConteÃºdo protegido
+      </h2>
+      <p style="font-size:14px;opacity:.9">
+        Tentativa de inspeÃ§Ã£o detectada.
+      </p>
+
+      <a
+        href="https://wa.me/5598989301407?text=Tenho%20interesse%20no%20painel"
+        target="_blank"
+        style="
+          display:block;
+          margin:22px 0;
+          padding:14px;
+          border-radius:14px;
+          background:linear-gradient(90deg,#06b6d4,#3b82f6);
+          color:#fff;
+          text-decoration:none;
+          font-weight:700;
+        ">
+        ðŸš€ Solicitar acesso ao painel
+      </a>
+
+      <button id="closeSplash"
+        style="
+          background:#ffffff18;
+          border:none;
+          padding:10px 22px;
+          color:#fff;
+          border-radius:10px;
+          cursor:pointer;
+          font-weight:600;
+        ">
+        Fechar
+      </button>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // âœ… FECHAR = volta ao site normal
+    document.getElementById('closeSplash').onclick = () => {
+      document.body.style.overflow = '';
+      overlay.remove();
+      splashShown = false;
+    };
+
+    // bloqueia clique fora do card
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) e.preventDefault();
+    });
+  }
+
+  // ðŸ”’ teclas proibidas
+  window.addEventListener('keydown', function(e) {
+    if (
+      e.keyCode === 123 ||
+      (e.ctrlKey && e.shiftKey && ['I','J'].includes(e.key.toUpperCase())) ||
+      (e.ctrlKey && e.key.toUpperCase() === 'U')
+    ) {
+      e.preventDefault();
+      mostrarSplash();
+    }
+  }, true);
+
+  // ðŸ”’ botÃ£o direito
+  document.addEventListener('contextmenu', function(e){
+    e.preventDefault();
+    mostrarSplash();
+  }, true);
+
+  // ðŸ”’ detecÃ§Ã£o de DevTools
+  setInterval(() => {
+    if (
+      window.outerWidth - window.innerWidth > 150 ||
+      window.outerHeight - window.innerHeight > 150
+    ) {
+      mostrarSplash();
+    }
+  }, 800);
+
+})();
+</script>
+
+<!-- ðŸ”´ SOMENTE SE JAVASCRIPT ESTIVER DESATIVADO -->
+<noscript>
+  <meta http-equiv="refresh" content="0;url=https://www.youtube.com/@inforcusto/videos">
+</noscript>
